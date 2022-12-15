@@ -61,7 +61,7 @@ def retrieve_example(doc: bs4.BeautifulSoup) -> str:
         if match is not None:
             code = match.parent.find_next("code")
             if code is not None:
-                example = code.text.strip()
+                example = code.text.strip("\r\n")
                 break
 
     if example is None:
@@ -144,7 +144,7 @@ def retrieve_input(day: int, year: int) -> Optional[str]:
             file=sys.stderr,
         )
         return None
-    input = response.text.strip()
+    input = response.text.strip("\r\n")
 
     # Save the puzzle input to a file
     input_path.parent.mkdir(parents=True, exist_ok=True)
@@ -206,12 +206,14 @@ def copy_template(start_day: int, year: int):
 
 
 def run_example(solver, args):
+    sys.stderr = open(os.devnull, "w")
     doc = retrieve_problem_page(args.day, args.year)
     input = retrieve_example(doc)
 
     parts = set(args.part or [])
     for part, answer in enumerate(solver.solve(input), 1):
         if len(parts) == 0 or part in parts:
+            # print(part)
             check_example_answer(doc, str(answer), part)
 
 
