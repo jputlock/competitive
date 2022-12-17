@@ -206,7 +206,7 @@ def copy_template(start_day: int, year: int):
 
 
 def run_example(solver, args):
-    sys.stderr = open(os.devnull, "w")
+    # sys.stderr = open(os.devnull, "w")
     doc = retrieve_problem_page(args.day, args.year)
     input = retrieve_example(doc)
 
@@ -215,6 +215,7 @@ def run_example(solver, args):
         if len(parts) == 0 or part in parts:
             # print(part)
             check_example_answer(doc, str(answer), part)
+            pass
 
 
 def main():

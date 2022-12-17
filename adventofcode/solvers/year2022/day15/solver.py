@@ -48,7 +48,6 @@ def solve(input: str) -> Generator[any, None, None]:
     # Part 1
     yield len([v for (_, y), v in known.items() if y == targety and v == "#"])
 
-    locs = set()
     for (sx, sy, dist) in sensors:
         for xx in [-1, 1]:
             for yy in [-1, 1]:
@@ -64,13 +63,5 @@ def solve(input: str) -> Generator[any, None, None]:
                             valid = False
                             break
                     if valid:
-                        return 4000000 * x + y
-
-        # for dx in range(-dist - 1, dist + 1 + 1):
-        #     for dy in [-(max_dist + 1 - abs(dx)), max_dist + 1 - abs(dx)]:
-        #         x, y = sx + dx, sy + dy
-        #         if not (0 < x < 4000000) or not (0 < y < 4000000):
-        #             continue
-        #         if (x, y) in locs:
-        #             continue
-        #         locs.add((x, y))
+                        yield 4000000 * x + y
+                        return
