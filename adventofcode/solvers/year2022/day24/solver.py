@@ -26,22 +26,18 @@ def neighborhood(point: tuple):
 
 
 def simulate(start, end, blizzards):
-    graph = nx.Graph()
-    graph.add_node(start)
-    graph.add_node(end)
-
     prev_reachable = set([start])
 
     elapsed = 0
-    while not nx.has_path(graph, start, end):
+    live = True
+    while live:
         # Find places to move
         reachable = set()
         for point in prev_reachable:
             for new_point in neighborhood(point) - blizzards.keys():
-                graph.add_edge(point, new_point)
                 reachable.add(new_point)
             if point in neighborhood(end):
-                graph.add_edge(point, end)
+                live = False
                 break
 
         # Update blizzards
@@ -66,13 +62,10 @@ def solve(input: str) -> Generator[any, None, None]:
     HEIGHT = len(lines)
     WIDTH = len(lines[0])
 
-    graph = nx.Graph()
     # Start node
     S = (0, -1)
-    graph.add_node(S)
     # End node
     E = (WIDTH - 1, HEIGHT)
-    graph.add_node(E)
 
     blizzards = dd(list)
     for y, line in enumerate(lines):
