@@ -1,0 +1,10 @@
+argparse
+beautifulsoup4
+libtmux
+networkx
+numpy
+python-dotenv
+requests
+termcolor
+typed-argument-parser
+z3-solver
