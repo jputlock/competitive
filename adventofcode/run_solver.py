@@ -1,24 +1,28 @@
 from argparse import FileType
+from io import TextIOWrapper
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from importlib import import_module
 from functools import partial
 from os import getenv
 from pathlib import Path
-from sys import stderr as STDERR, stdin as STDIN
 from tap import Tap
 from termcolor import colored
 from types import ModuleType
 from typing import *
 
+import os
 import re
 import requests
 import select
+import sys
+import time
 import traceback
 
 # Types
 PartAnswerPair = Tuple[int, str]
 AnswerCallback = Callable[[List[PartAnswerPair]], None]
+SolverMap = Dict[Tuple[int, int], ModuleType]
 
 
 def evaluate(
@@ -55,6 +59,7 @@ class ArgParser(Tap):
     day: int  # the day for the solver
     year: int  # the year for the solver
     mode: Literal["actual", "example"] | Path  # the type of puzzle input
+    pipe: str  # the name of the pipe to listen for commands from the Advent Console
 
     def configure(self) -> None:
         self.add_argument("--mode", type=to_path)
@@ -125,7 +130,7 @@ class WebsiteManager:
             print(
                 colored("WARNING", "yellow", attrs=["bold"]),
                 f"Cannot retrieve input from {url}",
-                file=STDERR,
+                file=sys.stderr,
             )
             return None
         input = response.text.strip("\r\n")
@@ -170,9 +175,12 @@ class WebsiteManager:
             print(f"Part {part} answer:{sep}{answer}")
 
             if index == len(part_answer_pairs) - 1:
-                response = input("Would you like to submit?\n")
+                response = input("Would you like to submit? ")
                 if response.lower() in ["y", "yes"]:
+                    print(colored("yes", "green"))
                     self.submit(day, year, part, answer)
+                else:
+                    print(colored("no", "red"))
 
     def verify_example_answer(
         self, day: int, year: int, part_answer_pairs: List[Tuple[int, str]]
@@ -254,7 +262,7 @@ class WebsiteManager:
             print(
                 colored("ERROR", "red", attrs=["bold"]),
                 "Cannot find example puzzle input",
-                file=STDERR,
+                file=sys.stderr,
             )
             return None
 
@@ -290,7 +298,7 @@ class WebsiteManager:
             print(
                 colored("WARNING", "yellow", attrs=["bold"]),
                 f"Cannot retrieve problem page from {url}",
-                file=STDERR,
+                file=sys.stderr,
             )
             return None
         input = response.text.strip("\r\n")
@@ -307,17 +315,11 @@ def noop(_unused: List[PartAnswerPair]):
     pass
 
 
-def main():
-    load_dotenv()
-    SESSION_TOKEN = getenv("ADVENT_OF_CODE_SESSION")
-    if SESSION_TOKEN is None:
-        print("ERROR: 'ADVENT_OF_CODE_SESSION' env variable is not set.")
-        return
-
-    args = ArgParser().parse_args()
-
-    website_manager = WebsiteManager(SESSION_TOKEN)
-
+def run_day(
+    website_manager: WebsiteManager,
+    args: ArgParser,
+    solver_map: SolverMap,
+):
     # Get the puzzle input and answer callback
     puzzle_input = None
     answer_callback: AnswerCallback = noop
@@ -328,6 +330,7 @@ def main():
         )
     elif args.mode == "example":
         puzzle_input = website_manager.get_example_input(args.day, args.year)
+        print(puzzle_input)
         answer_callback = partial(
             WebsiteManager.verify_example_answer, website_manager, args.day, args.year
         )
@@ -341,25 +344,59 @@ def main():
 
     # Get the solver
     padded_day = str(args.day).rjust(2, "0")
-    solver = import_module(f"solvers.year{args.year}.day{padded_day}.solver")
+    solver = solver_map.get(
+        (args.day, args.year),
+        import_module(f"solvers.year{args.year}.day{padded_day}.solver"),
+    )
 
+    print(f"{padded_day}/{args.year}: {args.mode}\n")
     evaluate(solver, puzzle_input, set(), answer_callback)
 
+
+def main(SESSION_TOKEN: str, args: ArgParser):
+    # Connect to the Launcher
+    pipe = os.open(args.pipe, os.O_RDWR)
+    os.dup2(
+        pipe,
+        sys.stdin.fileno(),
+    )
+
+    website_manager = WebsiteManager(SESSION_TOKEN)
+
+    solver_map = {}
+    run_day(website_manager, args, solver_map)
+
+    run_count = 1
     # Now start the event loop
-    in_list = [STDIN]
     running = True
     while running:
-        ready_sources = select.select(in_list, [], [])[0]
-
-        for source in ready_sources:
-            if source is STDIN:
-                user_input = input()
-                print(f"Echo: {user_input}")
+        command = input()
+        if command in ["run", "r"]:
+            os.system("clear")
+            print(f"Run count: {run_count}")
+            run_count += 1
+            run_day(website_manager, args, solver_map)
+        elif command.startswith("set-day"):
+            args.day = int(command[7:])
+        elif command.startswith("set-year"):
+            args.year = int(command[7:])
 
 
 if __name__ == "__main__":
+    load_dotenv()
+    SESSION_TOKEN = getenv("ADVENT_OF_CODE_SESSION")
+    if SESSION_TOKEN is None:
+        print("ERROR: 'ADVENT_OF_CODE_SESSION' env variable is not set.")
+        exit(1)
+
+    args = ArgParser().parse_args()
+
     try:
-        main()
+        main(SESSION_TOKEN, args)
     except Exception:
         traceback.print_exc()
-        input()
+        if args.mode == "actual":
+            input()
+        else:
+            print("Crashed, closing...")
+            time.sleep(2)
